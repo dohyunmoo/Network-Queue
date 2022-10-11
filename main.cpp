@@ -126,5 +126,10 @@ int queue(float r, unsigned int q, unsigned int tot_time) {
         }
     }
 
+    double* total;
+    total = new double[arrival.size() + departure.size() + observer.size()];
+
+    
+
     return 0;
 }
