@@ -41,12 +41,21 @@ int queue(float r, unsigned int q, unsigned int tot_time) {
     std::vector<double> observer;
     std::vector<double> departure;
 
+    std::vector<Events> total; // total events buffer
+    std::vector<Events> buffer; // temporary buffer used to sort
+    std::vector<ObserverData> observer_list; // temporary buffer used to sort
+
     unsigned int transmission_rate = 1000000;
     unsigned int average_bit_length = 2000;
     unsigned int arrival_count = 0;
     unsigned int departure_count = 0;
     unsigned int observer_count = 0;
     unsigned int packet_loss_count = 0;
+
+    double packet_loss_prob = 0;
+    double queue_idle_prob = 0;
+    double average_packet_count = 0;
+    unsigned int empty_count = 0;
 
     double lambda = (r * transmission_rate) / average_bit_length;
     double service_rate = transmission_rate / (r * average_bit_length);
@@ -126,10 +135,91 @@ int queue(float r, unsigned int q, unsigned int tot_time) {
         }
     }
 
-    double* total;
-    total = new double[arrival.size() + departure.size() + observer.size()];
-
+    unsigned int i = 0;
+    unsigned int j = 0;
     
+    while (i < arrival.size() && j < departure.size()) {
+        if (arrival[i] <= departure[j]) {
+            buffer.push_back(Events("Arrival", arrival[i]));
+            i++;
+        } else {
+            buffer.push_back(Events("Departure", departure[j]));
+            j++;
+        }
+    }
+
+    while (i < arrival.size()) {
+        buffer.push_back(Events("Arrival", arrival[i]));
+        i++;
+    }
+
+    while (j < departure.size()) {
+        buffer.push_back(Events("Departure", departure[j]));
+        j++;
+    }
+
+    unsigned int k = 0;
+    unsigned int l = 0;
+
+    while (k < buffer.size() && l < observer.size()) {
+        if (buffer[k].get_time() <= observer[l]) {
+            total.push_back(Events(buffer[k].get_event(), buffer[k].get_time()));
+            k++;
+        } else {
+            total.push_back(Events("Observer", observer[l]));
+            l++;
+        }
+    }
+
+    while (k < buffer.size()) {
+        total.push_back(Events(buffer[k].get_event(), buffer[k].get_time()));
+        k++;
+    }
+
+    while (l < observer.size()) {
+        total.push_back(Events("Observer", observer[l]));
+        l++;
+    }
+
+    for (size_t index = 0; index < total.size(); index++) {
+        if (q == 0) {
+            if (total[index].get_event() == "Arrival") {
+                arrival_count++;
+            }
+        } else {
+            if (total[index].get_event() == "Arrival") {
+                if (arrival_count - departure_count < q) {
+                    arrival_count++;
+                } else {
+                    packet_loss_count++;
+                }
+            }
+        }
+
+        if (total[index].get_event() == "Departure") {
+            departure_count++;
+        } else if (total[index].get_event() == "Observer") {
+            observer_count++;
+            observer_list.push_back(ObserverData(arrival_count, departure_count, observer_count));
+        }
+    }
+
+    unsigned int current_sum = 0;
+    for (size_t index = 0; index < observer_list.size(); index++) {
+        if (observer_list[index].get_arrival() - observer_list[index].get_departure() == 0) {
+            empty_count++;
+        }
+        current_sum += observer_list[index].get_arrival() - observer_list[index].get_departure();
+    }
+
+    packet_loss_prob = packet_loss_count / (arrival_count + packet_loss_count);
+    average_packet_count = current_sum / observer_count;
+    queue_idle_prob = empty_count / observer_count;
+
+    std::cout << "rho: " << r << ", queue size: " << q << ", total simulation time: " << tot_time << std::endl;
+    std::cout << "packet loss probability: " << packet_loss_prob << std::endl;
+    std::cout << "average packet count: " << average_packet_count << std::endl;
+    std::cout << "queue idle probability: " << queue_idle_prob << std::endl;
 
     return 0;
 }
